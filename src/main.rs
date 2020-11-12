@@ -32,13 +32,17 @@ fn main() {
     println!("Frequency: {}", c5_freq); 
 
     let (client, status) =
-      jack::Client::new("tone-gen", jack::ClientOptions::NO_START_SERVER).unwrap();
+      jack::Client::new("tonegen", jack::ClientOptions::NO_START_SERVER).unwrap();
     println!("{} : {:?}", client.name(), status);
 
-    let mut port = client
-      .register_port("tone-out", jack::AudioOut::default())
+    let mut audio_out = client
+      .register_port("audio_out", jack::AudioOut::default())
       .unwrap();
- 
+
+    let midi_in = client
+      .register_port("midi_in", jack::MidiIn::default())
+      .unwrap();
+
     let sample_rate = client.sample_rate() as u32;
     let (mut wav, phase_offset) = wave::Wave::tone(c4_freq, 0.8, 2.0, sample_rate, 0.0);
     let (c5_wav, phase_offset) = wave::Wave::tone(c5_freq, 0.8, 2.0, sample_rate, phase_offset);
@@ -53,7 +57,17 @@ fn main() {
     let (note_tx, note_rx) = crossbeam_channel::bounded::<scale::Note>(0);
     let process = jack::ClosureProcessHandler::new(
       move |_: &jack::Client, ps: &jack::ProcessScope| -> jack::Control {
-        let out = port.as_mut_slice(ps);
+        // Poll midi in
+        for e in midi_in.iter(ps) {
+          if e.bytes[0] == 144 {
+            println!("Note: {}, Pressure: {}", e.bytes[1], e.bytes[2]);
+          } else {
+            println!("Eyugh!");
+          }
+        }
+
+        // Fill audio out port buffer
+        let out = audio_out.as_mut_slice(ps);
         for v in out.iter_mut() {
           if let Ok(sig) = ctrl_rx.try_recv() {
             /// Can I do a match here?
