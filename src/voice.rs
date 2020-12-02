@@ -46,17 +46,16 @@ impl Voice {
         }
     }
 
-    pub fn press(&self, freq: f64, amp: f64) -> (Receiver::<Conframe>, Sender::<u8>) {
+    pub fn press<T: wave::SampleGen>(&self, gen :&T) -> (Receiver::<Conframe>, Sender::<u8>) {
         // ?? : This can be neatened up?
         let (attack, decay, sustain_amp, release) = (self.attack, self.decay, self.sustain_amp, self.release);
 
         let (conframe_tx, conframe_rx) = unbounded::<Conframe>();
         let (release_tx, release_rx) = unbounded::<u8>();
+        let samples = gen.get_full_cycle(); 
 
         thread::spawn(move || {
             let start_time = Instant::now();
-            let wav = wave::gen_tone_cycle(freq, amp);
-           
 
             // ?? : This can be it's own function?
             let mut n: usize = 0;
@@ -66,8 +65,8 @@ impl Voice {
 
             // Calculate attack portion
             while n < sample_count {
-                cycle_n = n % (wav.samples.len()-1);
-                sample = wav.samples[cycle_n] * (n as f64 / sample_count as f64) as f32;
+                cycle_n = n % (samples.len()-1);
+                sample = samples[cycle_n] * (n as f64 / sample_count as f64) as f32;
                 conframe_tx.send((sample, None)).unwrap();
                 n += 1;
             }
@@ -76,11 +75,11 @@ impl Voice {
             sample_count = (decay.as_secs_f64() * Voice::SAMPLE_RATE as f64) as usize;
             // Ensures that decay calculation starts at the correct phase in the cycle
             // !! : What I am doing with the phase offset? Lookit this please
-            let mut phase_offset = n % (wav.samples.len()-1);
+            let mut phase_offset = n % (samples.len()-1);
             n = 0;
             while n < sample_count {
-                cycle_n = (n + phase_offset) % (wav.samples.len()-1);
-                sample = wav.samples[cycle_n] * (1.0 - (1.0 - sustain_amp) * (n as f64 / sample_count as f64)) as f32;
+                cycle_n = (n + phase_offset) % (samples.len()-1);
+                sample = samples[cycle_n] * (1.0 - (1.0 - sustain_amp) * (n as f64 / sample_count as f64)) as f32;
                 conframe_tx.send((sample, None)).unwrap();
                 n += 1;
             }
@@ -89,11 +88,11 @@ impl Voice {
             // !! : Make this accept a release signal instead of holding for an arbitrary amount of time
             /*
             sample_count = (0.5 * Voice::SAMPLE_RATE as f64) as usize;
-            phase_offset = n & (wav.samples.len()-1);
+            phase_offset = n & (samples.len()-1);
             n = 0;
             while n < sample_count {
-                cycle_n = (n + phase_offset) % (wav.samples.len()-1);
-                sample = wav.samples[cycle_n] * sustain_amp as f32;
+                cycle_n = (n + phase_offset) % (samples.len()-1);
+                sample = samples[cycle_n] * sustain_amp as f32;
                 conframe_tx.send(sample).unwrap();
                 n += 1;
             }
@@ -105,12 +104,12 @@ impl Voice {
                     break;
                 }
                 if Instant::now() > next_chunk_time {
-                    phase_offset += n % (wav.samples.len()-1);
+                    phase_offset += n % (samples.len()-1);
                     n = 0;
                     sample_count = (chunk_duration.as_secs_f64() * Voice::SAMPLE_RATE as f64) as usize;
                     while n < sample_count {
-                        cycle_n = (n + phase_offset) % (wav.samples.len()-1);
-                        sample = wav.samples[cycle_n] * sustain_amp as f32;
+                        cycle_n = (n + phase_offset) % (samples.len()-1);
+                        sample = samples[cycle_n] * sustain_amp as f32;
                         conframe_tx.send((sample, None)).unwrap();
                         n += 1;
                     }
@@ -120,11 +119,11 @@ impl Voice {
 
             // Calculate release portion
             sample_count = (release.as_secs_f64() * Voice::SAMPLE_RATE as f64) as usize;
-            phase_offset += n % (wav.samples.len()-1);
+            phase_offset += n % (samples.len()-1);
             n = 0;
             while n < sample_count {
-                cycle_n = (n + phase_offset) % (wav.samples.len()-1);
-                sample = wav.samples[cycle_n] * (sustain_amp * (1.0 - (n as f64 / sample_count as f64))) as f32;
+                cycle_n = (n + phase_offset) % (samples.len()-1);
+                sample = samples[cycle_n] * (sustain_amp * (1.0 - (n as f64 / sample_count as f64))) as f32;
                 conframe_tx.send((sample, None)).unwrap();
                 n += 1;
             }

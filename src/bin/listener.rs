@@ -34,10 +34,15 @@ fn main() {
                     recording.clear();
                     println!("Recording...");
                 } else {
-                    wave::Wave{
+                    // !! : Abuse of the wave generator
+                    /*
+                    wave::SineGen{
                         samples: recording.clone(),
+                        sample_index: 0,
                     }.export("listener-out.wav");
-                    println!("Recording exported!");
+                    */
+                    // !! : Disabloed lol
+                    println!("Recording discarded! Haha!");
                 }
             }
             if is_recording {

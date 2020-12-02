@@ -56,7 +56,6 @@ fn main() {
     let decay = Duration::new(0, 500_000_000);
     let release = Duration::new(1, 0);
     let voice = voice::Voice::new(attack, decay, 0.8, release);
-
     let mut voice_releases = HashMap::new();
     let mut active_voices = Vec::new();
 
@@ -74,7 +73,8 @@ fn main() {
             let pressure = e.bytes[2];
             if pressure > 0 {
               println!("Press! Note: {}, Freq: {}, MIDI num: {}, Pressure: {}", note, freq, e.bytes[1], pressure);
-              let (conframe_rx, release_tx) = voice.press(freq, pressure as f64 / 127.0);
+              let gen = wave::SineGen::new(freq, pressure as f64 / 127.0);
+              let (conframe_rx, release_tx) = voice.press(&gen);
               // ?? : Replace with more intelligible keys
               voice_releases.insert(note, release_tx);
               active_voices.push((note, conframe_rx)); 
